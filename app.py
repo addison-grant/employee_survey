@@ -44,13 +44,11 @@ POOLED_COLOUR = "#8A8880"
 # Clicking a group cycles through these in order.
 CYCLE = {"include": "singled", "singled": "exclude", "exclude": "include"}
 STATE_GLYPH = {"include": "\u2003", "singled": "\u2714", "exclude": "\u2715"}
-STATE_HELP = {
-    "include": "Folded into Everyone else. Click to give it its own bar.",
-    "singled": "Shown as its own bar. Click to drop it from the chart.",
-    "exclude": "Left off the chart. Click to fold it back into Everyone else.",
-}
 
 SORT_DEFAULT = "Survey order"
+
+# Thickness of each interval bar, in pixels.
+BAR_HEIGHT = 20
 
 st.set_page_config(page_title="SCCWRP staff survey", layout="wide")
 
@@ -67,14 +65,16 @@ builtin = read_builtin()
 
 with st.sidebar:
     st.markdown("### Data")
-    st.caption(f"Showing the built-in {survey_data.YEAR} results unless you upload a file.")
+    st.caption(
+        f"Showing the built-in {survey_data.YEAR} results unless you upload a file. "
+        "The download below is in the format an upload expects."
+    )
     upload = st.file_uploader("Override with a CSV", type="csv")
     st.download_button(
         "Download the built-in data",
         builtin.to_csv(index=False).encode("utf-8"),
         file_name=f"sccwrp_survey_{survey_data.YEAR}.csv",
         mime="text/csv",
-        help="Use this as the template for an upload.",
     )
 
 data = builtin
@@ -109,9 +109,7 @@ total_responded = sum(respondents.values())
 # Rebuilt whenever the set of job classes changes, so uploading a file with
 # different classes cannot leave stale keys behind.
 if st.session_state.get("group_state_keys") != present_classes:
-    st.session_state.group_state = {
-        c: ("singled" if c == "4. Technician" else "include") for c in present_classes
-    }
+    st.session_state.group_state = {c: "include" for c in present_classes}
     st.session_state.group_state_keys = present_classes
 
 
@@ -147,7 +145,6 @@ with st.container(border=True):
             key=f"cycle_{job_class}",
             on_click=cycle_group,
             args=(job_class,),
-            help=STATE_HELP[state],
             width="stretch",
         )
 
@@ -193,7 +190,6 @@ with st.container(border=True):
         max_value=1000,
         value=63,
         step=1,
-        help="Used for job classes whose headcount you have left on auto.",
     )
     right.caption(
         "Headcount boxes are optional. A group left on auto is assumed to hold the same "
@@ -206,15 +202,8 @@ implied_total = sum(populations.values())
 singled = [c for c in present_classes if st.session_state.group_state[c] == "singled"]
 included = [c for c in present_classes if st.session_state.group_state[c] == "include"]
 
-c1, c2, c3, c4 = st.columns([1.5, 1.4, 1.6, 1.5])
-interval_mode = c1.radio(
-    "Interval", ["Census-adjusted", "Standard"], horizontal=True,
-    help=(
-        "Census-adjusted narrows the interval because there are only so many staff whose "
-        "opinion you have not heard. Standard treats these responses as a sample from an "
-        "open-ended pool."
-    ),
-)
+c1, c2, c3 = st.columns([1.5, 1.5, 1.7])
+interval_mode = c1.radio("Interval", ["Census-adjusted", "Standard"], horizontal=True)
 adjusted = interval_mode == "Census-adjusted"
 
 sort_order = c2.selectbox("Sort", [SORT_DEFAULT, "Lowest score first", "Highest score first"])
@@ -223,7 +212,10 @@ sort_basis = c3.selectbox(
     ["All staff", "Everyone else", "Singled-out groups"],
     disabled=sort_order == SORT_DEFAULT,
 )
-bar_height = c4.slider("Bar height", 4, 26, 12, help="Thickness of each bar in pixels.")
+st.caption(
+    "Census-adjusted narrows each interval because only so many staff have not been heard "
+    "from. Standard treats the responses as a sample from an open-ended pool."
+)
 
 
 # ---------------------------------------------------------------- series
@@ -317,7 +309,7 @@ if not series:
 
 ROW_PAD = 16
 HEADER_H = 34
-row_height = len(series) * bar_height + (len(series) - 1) * 3 + ROW_PAD
+row_height = len(series) * BAR_HEIGHT + (len(series) - 1) * 3 + ROW_PAD
 
 layout_rows = []
 y = 0.0
@@ -355,14 +347,14 @@ for entry in layout_rows:
         continue
 
     row = entry["row"]
-    block_h = len(series) * bar_height + (len(series) - 1) * 3
+    block_h = len(series) * BAR_HEIGHT + (len(series) - 1) * 3
     start = entry["y"] + (row_height - block_h) / 2
     tick_positions.append(entry["y"] + row_height / 2)
     tick_labels.append(row["label"])
 
     for i, bar in enumerate(row["bars"]):
         est = bar["est"]
-        centre = start + i * (bar_height + 3) + bar_height / 2
+        centre = start + i * (BAR_HEIGHT + 3) + BAR_HEIGHT / 2
         lo, hi = est.bounds(adjusted)
         wide_lo, wide_hi = est.bounds(False)
 
@@ -371,7 +363,7 @@ for entry in layout_rows:
             go.Scatter(
                 x=[wide_lo, wide_hi], y=[centre, centre],
                 mode="lines",
-                line=dict(color=bar["colour"], width=max(1.5, bar_height / 3)),
+                line=dict(color=bar["colour"], width=max(1.5, BAR_HEIGHT / 3)),
                 opacity=0.28, hoverinfo="skip", showlegend=False,
             )
         )
@@ -379,7 +371,7 @@ for entry in layout_rows:
             go.Scatter(
                 x=[lo, hi], y=[centre, centre],
                 mode="lines",
-                line=dict(color=bar["colour"], width=bar_height),
+                line=dict(color=bar["colour"], width=BAR_HEIGHT),
                 hoverinfo="skip", showlegend=False,
             )
         )
@@ -388,8 +380,8 @@ for entry in layout_rows:
                 x=[est.mean], y=[centre],
                 mode="markers",
                 marker=dict(
-                    symbol="line-ns", size=bar_height,
-                    line=dict(color="rgba(255,255,255,.85)", width=max(1, bar_height / 7)),
+                    symbol="line-ns", size=BAR_HEIGHT,
+                    line=dict(color="rgba(255,255,255,.85)", width=max(1, BAR_HEIGHT / 7)),
                 ),
                 hoverinfo="skip", showlegend=False,
             )
@@ -404,7 +396,7 @@ fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(
-        range=[0, 5], side="top", dtick=0.5,
+        range=[1, 5], side="top", dtick=0.5,
         gridcolor="rgba(128,128,128,.18)", zeroline=False,
         title=None, fixedrange=True,
     ),

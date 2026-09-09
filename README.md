@@ -11,15 +11,16 @@ confidence interval, and the notch inside marks the observed mean. Colour runs
 dark navy for the most senior class down to bright blue for the least, so the
 chart reads as a seniority gradient without labelling each bar.
 
-The horizontal axis is pinned to 0&ndash;5 so bar positions stay comparable no
-matter which questions or groups you have on screen. Exact figures live in the
-table under the chart rather than in hover tooltips.
+The horizontal axis is pinned to the 1&ndash;5 Likert range so bar positions stay
+comparable no matter which questions or groups you have on screen. There are no
+hover tooltips anywhere in the app; exact figures live in the table under the
+chart, which also exports to CSV.
 
 **Job class controls.** Click a group to cycle it through three states:
 
 | Glyph | State | Effect |
 | --- | --- | --- |
-| blank | included | Folded into a single "Everyone else" bar |
+| blank | included | Folded into a single pooled bar (the default for every class) |
 | ✔ | singled out | Gets its own bar |
 | ✕ | excluded | Left off the chart entirely |
 
