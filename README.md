@@ -11,10 +11,18 @@ confidence interval, and the notch inside marks the observed mean. Colour runs
 dark navy for the most senior class down to bright blue for the least, so the
 chart reads as a seniority gradient without labelling each bar.
 
-The horizontal axis is pinned to the 1&ndash;5 Likert range so bar positions stay
+The horizontal axis is pinned to the full Likert range so bar positions stay
 comparable no matter which questions or groups you have on screen. There are no
 hover tooltips anywhere in the app; exact figures live in the table under the
 chart, which also exports to CSV.
+
+**Scale.** The default runs 1&ndash;5, matching the raw survey. Switching to
+*Centred on neutral* subtracts 3, so 0 marks "neither agree nor disagree" and
+the sign of a score says whether a group is net-positive. This is a pure shift:
+interval widths and every comparison between groups are identical either way.
+Its value is that a bar crossing 0 has a plain meaning &mdash; that group is not
+reliably on either side of neutral. Its risk is that ratios become tempting and
+they are meaningless, because 0 is a midpoint rather than an absence of opinion.
 
 **Job class controls.** Click a group to cycle it through three states:
 
@@ -49,6 +57,11 @@ people at SCCWRP and 47 already answered, so at most 16 unknown opinions remain
 and they can only move the average so far. With those numbers the interval
 shrinks by √((63−47)/(63−1)) ≈ 0.51, roughly halving each bar. This is the right
 frame for describing what *these* staff think.
+
+Only one interval is drawn at a time — use the toggle to switch. Note that the
+correction is derived for simple random sampling without replacement, whereas
+these responses are self-selected, so it addresses sampling variability but not
+the systematic difference between people who answered and people who did not.
 
 The correction assumes non-responders resemble responders. In staff surveys they
 often do not — people who are disengaged or worried are likelier to skip — so

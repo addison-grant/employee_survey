@@ -50,6 +50,10 @@ SORT_DEFAULT = "Survey order"
 # Thickness of each interval bar, in pixels.
 BAR_HEIGHT = 20
 
+SCALE_RAW = "1 to 5"
+SCALE_CENTRED = "Centred on neutral"
+NEUTRAL = 3.0  # "neither agree nor disagree" on the 1-5 scale
+
 st.set_page_config(page_title="SCCWRP staff survey", layout="wide")
 
 
@@ -202,12 +206,18 @@ implied_total = sum(populations.values())
 singled = [c for c in present_classes if st.session_state.group_state[c] == "singled"]
 included = [c for c in present_classes if st.session_state.group_state[c] == "include"]
 
-c1, c2, c3 = st.columns([1.5, 1.5, 1.7])
+c1, c2, c3, c4 = st.columns([1.4, 1.4, 1.3, 1.5])
 interval_mode = c1.radio("Interval", ["Census-adjusted", "Standard"], horizontal=True)
 adjusted = interval_mode == "Census-adjusted"
 
-sort_order = c2.selectbox("Sort", [SORT_DEFAULT, "Lowest score first", "Highest score first"])
-sort_basis = c3.selectbox(
+scale_mode = c2.radio("Scale", [SCALE_RAW, SCALE_CENTRED], horizontal=True)
+centred = scale_mode == SCALE_CENTRED
+# Centring is a pure shift: every mean moves by -3, every interval width is
+# untouched, and no comparison between groups changes.
+offset = NEUTRAL if centred else 0.0
+
+sort_order = c3.selectbox("Sort", [SORT_DEFAULT, "Lowest score first", "Highest score first"])
+sort_basis = c4.selectbox(
     "Score used for sorting",
     ["All staff", "Everyone else", "Singled-out groups"],
     disabled=sort_order == SORT_DEFAULT,
@@ -355,18 +365,9 @@ for entry in layout_rows:
     for i, bar in enumerate(row["bars"]):
         est = bar["est"]
         centre = start + i * (BAR_HEIGHT + 3) + BAR_HEIGHT / 2
-        lo, hi = est.bounds(adjusted)
-        wide_lo, wide_hi = est.bounds(False)
+        raw_lo, raw_hi = est.bounds(adjusted)
+        lo, hi = raw_lo - offset, raw_hi - offset
 
-        # Standard interval, drawn faintly behind the solid bar.
-        fig.add_trace(
-            go.Scatter(
-                x=[wide_lo, wide_hi], y=[centre, centre],
-                mode="lines",
-                line=dict(color=bar["colour"], width=max(1.5, BAR_HEIGHT / 3)),
-                opacity=0.28, hoverinfo="skip", showlegend=False,
-            )
-        )
         fig.add_trace(
             go.Scatter(
                 x=[lo, hi], y=[centre, centre],
@@ -377,7 +378,7 @@ for entry in layout_rows:
         )
         fig.add_trace(
             go.Scatter(
-                x=[est.mean], y=[centre],
+                x=[est.mean - offset], y=[centre],
                 mode="markers",
                 marker=dict(
                     symbol="line-ns", size=BAR_HEIGHT,
@@ -396,8 +397,12 @@ fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(
-        range=[1, 5], side="top", dtick=0.5,
-        gridcolor="rgba(128,128,128,.18)", zeroline=False,
+        range=[-2, 2] if centred else [1, 5],
+        side="top", dtick=0.5,
+        gridcolor="rgba(128,128,128,.18)",
+        zeroline=centred,
+        zerolinecolor="rgba(128,128,128,.55)",
+        zerolinewidth=2,
         title=None, fixedrange=True,
     ),
     yaxis=dict(
@@ -409,11 +414,19 @@ fig.update_layout(
 
 st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-st.caption(
-    "The faint line behind each bar is the standard 95% interval. The solid bar is that "
-    "interval after the finite population correction, which assumes the staff who did not "
-    "respond think like the staff who did."
-)
+if centred:
+    st.caption(
+        "Scores are shifted by \u22123 so that 0 marks \u201cneither agree nor disagree\u201d. "
+        "This is a pure shift: interval widths and every comparison between groups are "
+        "unchanged. A bar that crosses 0 means that group is not reliably on either side of "
+        "neutral. Do not read ratios off this scale \u2014 +1.71 is not \u201cseven times\u201d "
+        "+0.25, because 0 is a midpoint, not an absence of opinion."
+    )
+else:
+    st.caption(
+        "Bars show the interval selected above. Census-adjusted applies a finite population "
+        "correction, which assumes the staff who did not respond think like the staff who did."
+    )
 
 with st.expander("Download the numbers behind this chart"):
     export = pd.DataFrame(
@@ -424,9 +437,10 @@ with st.expander("Download the numbers behind this chart"):
                 "Question": r["full"],
                 "Group": b["label"],
                 "n": b["est"].n,
-                "Mean": round(b["est"].mean, 3),
-                "Low": round(b["est"].bounds(adjusted)[0], 3),
-                "High": round(b["est"].bounds(adjusted)[1], 3),
+                "Mean": round(b["est"].mean - offset, 3),
+                "Low": round(b["est"].bounds(adjusted)[0] - offset, 3),
+                "High": round(b["est"].bounds(adjusted)[1] - offset, 3),
+                "Scale": scale_mode,
                 "Interval": interval_mode,
                 "Assumed group size": round(b["population"], 1),
             }
