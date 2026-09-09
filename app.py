@@ -404,7 +404,7 @@ fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(
-        range=[0, 5], side="top", dtick=0.5,
+        range=[1, 5], side="top", dtick=0.5,
         gridcolor="rgba(128,128,128,.18)", zeroline=False,
         title=None, fixedrange=True,
     ),
