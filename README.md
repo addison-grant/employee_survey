@@ -11,6 +11,10 @@ confidence interval, and the notch inside marks the observed mean. Colour runs
 dark navy for the most senior class down to bright blue for the least, so the
 chart reads as a seniority gradient without labelling each bar.
 
+The horizontal axis is pinned to 0&ndash;5 so bar positions stay comparable no
+matter which questions or groups you have on screen. Exact figures live in the
+table under the chart rather than in hover tooltips.
+
 **Job class controls.** Click a group to cycle it through three states:
 
 | Glyph | State | Effect |
@@ -71,14 +75,19 @@ you push to the tracked branch. The free tier gives you one private app and
 unlimited public ones; apps sleep after a stretch of inactivity and wake on the
 next visit.
 
-Note that anything you push to a public repo is public, including the survey
-data. If the responses are sensitive, keep the repo private and use the private
-app slot, or deploy somewhere access-controlled instead.
+Note that anything you push to a public repo is public, including the response
+tallies in `survey_data.py`. If the results are sensitive, keep the repo private
+and use the private app slot, or deploy somewhere access-controlled instead.
 
 ## Using a different year's data
 
-The sidebar accepts a CSV upload with the same columns as
-`data/sccwrp_survey_2026.csv`:
+The 2026 responses are built into `survey_data.py`, so the app runs with no data
+files present. To look at other results without touching the code, upload a CSV
+from the sidebar; it overrides the built-in data for that session only. The
+sidebar also has a download button that hands you the built-in data in the exact
+format an upload expects, which is the easiest starting template.
+
+Columns an uploaded CSV needs:
 
 | Column | Meaning |
 | --- | --- |
@@ -91,18 +100,29 @@ The sidebar accepts a CSV upload with the same columns as
 | the five Likert columns | Response tallies, strongly disagree through strongly agree |
 | `No opinion` | Optional, counted toward headcount but excluded from the mean |
 
-To make the change permanent, replace the CSV in `data/` and update
-`DATA_FILE` in `app.py`.
+To change the built-in default permanently, edit the `QUESTIONS` list in
+`survey_data.py`. Each entry holds one question and four tuples of tallies, one
+per job class in `CLASSES` order, running strongly disagree through strongly
+agree and ending with the no-opinion count.
 
 ## Layout
 
 ```
-app.py                            Streamlit UI and chart
-survey_stats.py                   Scoring, intervals, population maths
-data/sccwrp_survey_2026.csv       Response tallies
+app.py                Streamlit UI and chart
+survey_data.py        The 2026 response tallies
+survey_stats.py       Scoring, intervals, population maths
 requirements.txt
-.streamlit/config.toml            Theme
+.streamlit/config.toml
 ```
 
-`survey_stats.py` has no Streamlit dependency, so the numbers can be checked or
-reused without launching the app.
+Neither `survey_data.py` nor `survey_stats.py` imports Streamlit, so the numbers
+can be checked or reused without launching the app:
+
+```python
+from survey_data import build_frame
+from survey_stats import estimate, pool
+
+frame = build_frame()
+block = frame[(frame.Section == "Job satisfaction") & (frame.Question_num == 4)]
+print(estimate(pool(block, ["4. Technician"]), population=21.45))
+```

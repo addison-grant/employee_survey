@@ -5,12 +5,11 @@ Run locally with:  streamlit run app.py
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import survey_data
 from survey_stats import (
     LIKERT_COLS,
     estimate,
@@ -18,8 +17,6 @@ from survey_stats import (
     load_survey,
     pool,
 )
-
-DATA_FILE = Path(__file__).parent / "data" / "sccwrp_survey_2026.csv"
 
 # Job classes from most senior to least. The colour ramp runs dark navy for the
 # most senior down to bright blue for the least, so the chart reads as a
@@ -62,27 +59,31 @@ st.set_page_config(page_title="SCCWRP staff survey", layout="wide")
 
 
 @st.cache_data(show_spinner=False)
-def read_default() -> pd.DataFrame:
-    return load_survey(DATA_FILE)
+def read_builtin() -> pd.DataFrame:
+    return survey_data.build_frame()
 
+
+builtin = read_builtin()
 
 with st.sidebar:
     st.markdown("### Data")
-    upload = st.file_uploader(
-        "Use a different survey file",
-        type="csv",
-        help="Same columns as data/sccwrp_survey_2026.csv. Leave empty for the 2026 results.",
+    st.caption(f"Showing the built-in {survey_data.YEAR} results unless you upload a file.")
+    upload = st.file_uploader("Override with a CSV", type="csv")
+    st.download_button(
+        "Download the built-in data",
+        builtin.to_csv(index=False).encode("utf-8"),
+        file_name=f"sccwrp_survey_{survey_data.YEAR}.csv",
+        mime="text/csv",
+        help="Use this as the template for an upload.",
     )
 
+data = builtin
 if upload is not None:
     try:
         data = load_survey(upload)
-        st.sidebar.success(f"Loaded {upload.name}")
+        st.sidebar.success(f"Using {upload.name}")
     except Exception as exc:  # noqa: BLE001 - surfaced to the user verbatim
-        st.sidebar.error(str(exc))
-        data = read_default()
-else:
-    data = read_default()
+        st.sidebar.error(f"{exc} Falling back to the built-in data.")
 
 sections = (
     data[["Section_num", "Section"]]
@@ -379,12 +380,7 @@ for entry in layout_rows:
                 x=[lo, hi], y=[centre, centre],
                 mode="lines",
                 line=dict(color=bar["colour"], width=bar_height),
-                showlegend=False,
-                hovertemplate=(
-                    f"<b>{row['label']}</b><br>{bar['label']} &middot; n={est.n}"
-                    f"<br>Mean {est.mean:.2f}"
-                    f"<br>{interval_mode} range {lo:.2f}\u2013{hi:.2f}<extra></extra>"
-                ),
+                hoverinfo="skip", showlegend=False,
             )
         )
         fig.add_trace(
@@ -399,23 +395,16 @@ for entry in layout_rows:
             )
         )
 
-lows = [b["est"].bounds(adjusted)[0] for r in rows for b in r["bars"]]
-highs = [b["est"].bounds(adjusted)[1] for r in rows for b in r["bars"]]
-x_lo = max(1.0, (min(lows) - 0.12) // 0.25 * 0.25) if lows else 3.0
-x_hi = min(5.0, -(-(max(highs) + 0.12) // 0.25) * 0.25) if highs else 5.0
-if x_hi - x_lo < 0.75:
-    x_hi = min(5.0, x_lo + 0.75)
-
 fig.update_layout(
     height=chart_height,
     margin=dict(l=210, r=24, t=34, b=12),
     shapes=shapes,
     annotations=annotations,
-    hovermode="closest",
+    hovermode=False,
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(
-        range=[x_lo, x_hi], side="top", dtick=0.25,
+        range=[0, 5], side="top", dtick=0.5,
         gridcolor="rgba(128,128,128,.18)", zeroline=False,
         title=None, fixedrange=True,
     ),
