@@ -126,6 +126,10 @@ def cycle_group(job_class: str) -> None:
 
 st.title("SCCWRP staff survey, 2026")
 
+chart_container = st.container()
+
+st.divider()
+
 section_choice = st.radio(
     "Question group",
     ["All questions", *sections],
@@ -273,9 +277,10 @@ for _, q in questions.iterrows():
     ]
     bars = []
     for s in series:
-        est = estimate(pool(block, s["members"]), s["population"])
+        counts = pool(block, s["members"])
+        est = estimate(counts, s["population"])
         if est is not None:
-            bars.append({**s, "est": est})
+            bars.append({**s, "est": est, "counts": counts})
     basis = estimate(pool(block, basis_members), implied_total)
     rows.append(
         {
@@ -298,14 +303,14 @@ else:
 
 show_headers = sort_order == SORT_DEFAULT and section_choice == "All questions"
 
-st.caption(
+chart_container.caption(
     f"{total_responded} of {implied_total:,.0f} staff responded "
     f"({total_responded / implied_total:.0%}). Each bar is a 95% range for that group's mean "
     "on that question; the notch inside it is the observed mean."
 )
 
 if basis_fallback:
-    st.warning(
+    chart_container.warning(
         f"No group is currently {'singled out' if sort_basis == 'Singled-out groups' else 'folded into Everyone else'}, "
         "so the sort is using all staff instead."
     )
@@ -314,7 +319,7 @@ if basis_fallback:
 # ---------------------------------------------------------------- chart
 
 if not series:
-    st.info("Every group is dropped from the chart. Click a cross to bring one back.")
+    chart_container.info("Every group is dropped from the chart. Click a cross to bring one back.")
     st.stop()
 
 ROW_PAD = 16
@@ -334,6 +339,10 @@ for row in rows:
 chart_height = y + 46
 
 fig = go.Figure()
+max_count = max((c for r in rows for b in r["bars"] for c in b["counts"][:5]), default=1)
+if max_count == 0:
+    max_count = 1
+
 tick_positions, tick_labels = [], []
 shapes, annotations = [], []
 
@@ -368,11 +377,27 @@ for entry in layout_rows:
         raw_lo, raw_hi = est.bounds(adjusted)
         lo, hi = raw_lo - offset, raw_hi - offset
 
+        for val_idx, count in enumerate(bar["counts"][:5]):
+            if count == 0:
+                continue
+            x_val = val_idx + 1 - offset
+            shapes.append(
+                dict(
+                    type="rect",
+                    x0=x_val - 0.5, x1=x_val + 0.5,
+                    y0=centre - BAR_HEIGHT / 2, y1=centre + BAR_HEIGHT / 2,
+                    fillcolor=bar["colour"],
+                    opacity=min(1.0, (count / max_count) * 0.85 + 0.15),
+                    line=dict(width=0),
+                    layer="below"
+                )
+            )
+
         fig.add_trace(
             go.Scatter(
                 x=[lo, hi], y=[centre, centre],
                 mode="lines",
-                line=dict(color=bar["colour"], width=BAR_HEIGHT),
+                line=dict(color="#222222", width=3),
                 hoverinfo="skip", showlegend=False,
             )
         )
@@ -381,8 +406,7 @@ for entry in layout_rows:
                 x=[est.mean - offset], y=[centre],
                 mode="markers",
                 marker=dict(
-                    symbol="line-ns", size=BAR_HEIGHT,
-                    line=dict(color="rgba(255,255,255,.85)", width=max(1, BAR_HEIGHT / 7)),
+                    symbol="circle", size=7, color="#222222",
                 ),
                 hoverinfo="skip", showlegend=False,
             )
@@ -397,8 +421,9 @@ fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(
-        range=[-2, 2] if centred else [1, 5],
-        side="top", dtick=0.5,
+        range=[-2.5, 2.5] if centred else [0.5, 5.5],
+        tickvals=[-2, -1, 0, 1, 2] if centred else [1, 2, 3, 4, 5],
+        side="top",
         gridcolor="rgba(128,128,128,.18)",
         zeroline=centred,
         zerolinecolor="rgba(128,128,128,.55)",
@@ -412,10 +437,10 @@ fig.update_layout(
     ),
 )
 
-st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+chart_container.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 if centred:
-    st.caption(
+    chart_container.caption(
         "Scores are shifted by \u22123 so that 0 marks \u201cneither agree nor disagree\u201d. "
         "This is a pure shift: interval widths and every comparison between groups are "
         "unchanged. A bar that crosses 0 means that group is not reliably on either side of "
@@ -423,7 +448,7 @@ if centred:
         "+0.25, because 0 is a midpoint, not an absence of opinion."
     )
 else:
-    st.caption(
+    chart_container.caption(
         "Bars show the interval selected above. Census-adjusted applies a finite population "
         "correction, which assumes the staff who did not respond think like the staff who did."
     )
